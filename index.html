@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Document</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.1.1/jquery.min.js"></script>
+
+    <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyAQXxoOaM5EhUTiwVwNUlEfuRXz6SqGfqU&libraries=places&&callback=startMap"
+    ></script>
+    <style>
+        #title {
+            width: 100%;
+            height: 20%;
+            background-color: #347FC4;   
+            font-family: 'Georgia', 'sans-serif';
+            font-size: 70px;
+            color:white;
+            text-align:center
+            
+        }
+        #mapka {
+            height: 80%;
+            width: 60%;
+            float:left;
+        }
+        html, body {
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+        #calculate , #deleteRoute , #getLocation {
+            border: none;
+            text-align: center;
+            font-size:20px;
+            color: white;
+            background-color: #938F96;
+            font-family: 'Georgia', 'sans-serif';
+        }
+        
+        #panel {
+            width: 20%;
+            height: 80%;
+            background-color: #7DADD9;
+            text-align:center;
+            float:left;
+            color:white;
+            font-size:25px;
+            font-family: 'Georgia', 'sans-serif';
+        }
+        #solution{
+            width: 20%;
+            height: 80%;
+            background-color: #7DADD9;
+            float:right;
+            font-family: 'Georgia', 'sans-serif';
+            color:white;
+            text-align: center;
+        }
+       
+        
+    </style>
+</head>
+<body>
+     
+        <div id="title">Zaplanuj spotkanie z przyjaciółmi</div>
+          <div id="panel">
+                 Znajdź obiekt oraz pokaż trasę <br>
+                 <button id="calculate" > Oblicz</button>
+                 <button id="deleteRoute" > Wyczyść</button><br>      
+                 Pobierz swoja pozycje <br>       
+                 <button id="getLocation" > Pobierz lokalizację</button><br>
+                 Wybierz obszar zainteresowań <br>
+                <div id="categoryBelka" >
+                    <input  checked id="kat1" type="checkbox" onclick="draw('kat1','restaurant')" /> Restaurant
+                    <input  id="kat2" type="checkbox" onclick="draw('kat2','pub')" /> Pub
+                    <input  id="kat3" type="checkbox" onclick="draw('kat3','cafe')" /> Cafe
+                </div>
+
+                 Wprowadz pozycje uzytkownikow
+              <div id="pac-input">
+              <button id="addFields">+</button><br>
+               <input id="pac-input1" type="text" placeholder="Wpisz lokalizację"><br>
+               <input id="pac-input2" type="text" placeholder="Wpisz lokalizację"><br>
+               <input id="pac-input3" type="text" placeholder="Wpisz lokalizację"><br>
+
+
+              </div>
+
+          </div>  
+
+        <div id="mapka"></div>
+        <div id="solution">   
+          <div id="cel"></div><br>
+          <div id="where"></div>
+          <div id="solut"></div>
+        </div>     
+       
+       
+
+      
+    <script>
+        
+        var map;
+        var objects=[];
+        var positions=[];
+        var infoWindow ;
+        var directionsDisplay;
+        var directionsService;
+        var now2=[];
+        var markery=[];
+        var liczba = 3;
+        var warunek = 0;
+        var tabDirRed=[];
+        var markerCel;
+        var address=[];
+        var condition2 =0;
+        var pp=[];
+        var time=[];
+        var tabinfo=[];
+        var tabobj = [];
+
+        
+        
+        
+        function startMap()
+        {
+            var coordinates = new google.maps.LatLng(52.23833521224932,20.984639078378677);
+            var optionMap = {
+                center: coordinates,
+                zoom: 12,
+                mapTypeId: google.maps.MapTypeId.ROADMAP
+            };
+            map = new google.maps.Map(document.getElementById("mapka"),optionMap);
+            
+            // ustawiam style css dla controllera
+
+            myRestaurant();     
+            
+
+            //przycisk do pobrania swojej lokalizacji
+            $(document).on('click', '#getLocation', function(){
+                console.log("clicked");
+                getLocation();
+            });
+            //przycisk do pobrania imienia 1 przyjaciela
+            $(document).on('click', '#button-FirstName', function(){
+                setName('input-FirstName', firstPerson);
+                console.log(firstPerson);
+            });
+            
+            //przycisk do pobrania imienia 2 przyjaciela
+            $(document).on('click', '#button-SecondName', function(){
+                setName('input-SecondName', secondPerson);
+                console.log(secondPerson);
+            });
+            
+            //przycisk do pobrania imienia 3 przyjaciela
+            $(document).on('click', '#button-ThirdName', function(){
+                setName('input-ThirdName', thirdPerson);
+                console.log(thirdPerson);
+            });
+            $(document).on('click' , '#addFields' , function(){
+                addFields();
+            });
+            $(document).on('click' , '#deleteRoute' , function(){
+                deleteRoute();
+            });
+            
+
+            
+            autoWprowadz(document.getElementById("pac-input1"));
+            autoWprowadz(document.getElementById("pac-input2"));
+            autoWprowadz(document.getElementById("pac-input3"));
+            //przycisk do obliczenia 
+            $(document).on('click', '#calculate', function(){
+                console.log("calculate");
+                
+                calculateDistanse();
+            });      
+            
+           
+        }
+        
+                   function autoWprowadz(input) {
+               var autocomplete = new google.maps.places.Autocomplete(input);
+               autocomplete.bindTo('bounds' , map);
+               autocomplete.addListener('place_changed', function() {
+                   var place = autocomplete.getPlace();
+                   if (!place.geometry) {
+                       return;
+                   }
+                   var marker = new google.maps.Marker({
+                      map:map,
+                      anchorPoint: new google.maps.Point(0,0)
+                   });
+                   address.push(place.name);
+                   var person = {
+                       location: place.geometry.location,
+                       id: input.id
+                   }
+                   markery.push(marker);
+                   marker.setPlace({
+                      placeId: place.place_id,
+                      location: person.location
+                   });
+                   marker.setVisible(true);
+                   positions.push(place.geometry.location);
+                   now2.push(person);
+                   console.log(positions);
+                   console.log(positions.length);
+                   console.log(now2.length);
+
+                   if (now2.length > 1) {
+                       for ( var i = 0 ; i < now2.length - 1 ; i++) {
+                           for ( var j=i+1 ; j<now2.length ; j++) {
+                             if (now2[i].id == now2[j].id) {
+                                    console.log("powtarza sie id");
+                                    console.log("stare i " + i);
+                                    positions.splice(i,1);
+                                    now2.splice(i,1);
+                                    markery[i].setVisible(false);
+                                    markery.splice(i,1);
+                                    console.log(positions.length);
+                                    
+                                }
+                        }
+                       }
+                   }
+
+               } );
+           }
+        
+        //funkcja do dodawanie pozycji
+        function addObject(_position,_title,_description,category,icona_url)
+        {
+            var optionObject = {
+                position: _position,
+                map: map,
+                title: _title,
+                icon: new google.maps.MarkerImage(icona_url)
+            };
+                var object = new google.maps.Marker(optionObject);
+                object.category = category;
+                objects.push(object);    
+                infoWindow = new google.maps.InfoWindow();
+                
+            google.maps.event.addListener(object, "click", function() {
+                infoWindow.setContent(contentWindow(_title,_description));
+                infoWindow.open(map,object);
+            });
+            
+        }
+        
+        function getLocation() {
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(showPosition);
+            console.log("wywolanie funkcji getLocation");
+        } else {
+            console.log("Nie dziala");   
+       }
+            //pobieranie lokalizacji swojego urzadzenia
+        }
+       function showPosition(position) {
+           console.log("Wywolanie calllbaka showPosition");
+           var myPosition = new google.maps.LatLng(position.coords.latitude , position.coords.longitude);
+           positions.push(myPosition);
+           console.log(positions);
+           var person = {
+               location: myPosition,
+               id: 'mojaPozycja'
+           }
+           now2.push(person);
+           var myPositionMarker = new google.maps.Marker({
+              map: map,
+              position: myPosition
+           });
+           markery.push(myPositionMarker);
+           condition2++;
+           // obliczenia odleglosci
+        }
+        function calculateDistanse() {
+            
+            if (positions.length != 0){
+            var service = new google.maps.DistanceMatrixService();
+            console.log("calc length " + objects.length);
+            var now=[];
+            for (var i=0; i<objects.length ; i++)
+                {
+                    now.push(objects[i].position);
+                }
+            console.log(now);
+            service.getDistanceMatrix({
+                origins: [].concat(now) ,
+                destinations: [].concat(positions),
+                travelMode: google.maps.TravelMode.DRIVING,
+                unitSystem: google.maps.UnitSystem.METRIC,
+            },callbackDistanse);
+            } else {
+                alert("Wprowadz przynajmniej jedna pozycje");
+            }
+        }
+        function callbackDistanse(response, status) {
+            if (status != google.maps.DistanceMatrixStatus.OK) {
+                alert("Error was:" + status);
+            } else {
+                var origins = response.originAddresses;
+                var destinations = response.destinationAddresses;
+                var dystanse=[];
+
+                for (var i = 0; i < origins.length; i++) {
+                        var results = response.rows[i].elements;
+                    
+                    for (var j = 0; j < results.length; j++) {
+                            var element = results[j];
+                            var distance = element.distance.value;
+                            var from = origins[i];
+                            var to = destinations[j];
+                            dystanse.push(distance);        
+                        }                    
+                }
+                console.log(dystanse);
+                
+                var Max=0;
+                var Min=0;
+                var Diff;
+                var tabMax = [];
+                var tabMin = [];
+                var tabDiff = [];
+                for ( var k = 0 ; k < dystanse.length ; k = k + positions.length){
+                    Max = dystanse[k];
+                    
+                    for (var i=k ; i < positions.length -1 + k; i++)
+                        {
+                            if ( Max > dystanse[i+1])
+                                console.log("byl wiekszy")
+                                else
+                                    {
+                                        Max = dystanse[i+1];
+                                    }
+
+                        }
+                    Min = dystanse[k];
+                    
+                    for (var i=k ; i < positions.length -1 + k; i++)
+                        {
+                            if (Min < dystanse[i+1])
+                                console.log("byl mniejszy");
+                            else
+                                {
+                                    Min = dystanse[i+1];
+                                }
+                        }
+                    Diff = Max - Min;
+                    tabDiff.push(Diff);
+                }
+                console.log(tabDiff);
+                
+                var indeks = 0;
+                var rMin = 0;
+                rMin = tabDiff[0];
+                console.log("pierwsze rMin " + rMin);
+                for ( var i = 0 ; i < tabDiff.length - 1 ; i++)
+                    {
+                        if (rMin > tabDiff[i+1]) {
+                            rMin = tabDiff[i+1];
+                        }
+                            
+                    }
+                console.log(rMin);
+                indeks = tabDiff.indexOf(rMin);
+                console.log(indeks);
+                
+                
+                
+                
+                var start = objects[indeks].position;  
+                var end = positions[i];
+                
+                console.log()
+                
+                console.log(objects[indeks].title);
+                document.getElementById("cel").innerHTML ='Cel : '+ objects[indeks].title;
+                
+                infoWindow = new google.maps.InfoWindow({maxWidth:200});
+                infoWindow.setContent(contentWindow('Cel',objects[indeks].title));
+                infoWindow.open(map,objects[indeks]);
+                tabinfo.push(infoWindow);
+                console.log(tabinfo);
+                tabobj.push(indeks);
+                if (tabinfo.length > 1) {
+
+                  console.log("wieksze od 1 ");
+                  tabinfo[0].close();
+
+                }
+                
+                
+                
+
+                
+                
+                for (var i=0 ; i < objects.length ; i++) {
+                    objects[i].setVisible(false);
+                }
+                
+                    
+                    
+                    
+                    document.getElementById("cel").innerHTML ='Cel : '+ objects[indeks].title;
+                    for ( var i=0 ; i<tabDirRed.length ; i++){
+                        tabDirRed[i].setMap(null);                
+                    }
+                    for ( var i=0; i <markery.length ; i++) {
+                        markery[i].setVisible(false);
+                    }
+                    
+               
+                for ( var i=0; i <markery.length ; i++) {
+                    markery[i].setVisible(true);
+                    console.log("a");
+
+                }
+                /*
+                     if ( tabinfo.length > 1) {
+                      markery[0].setVisible(false);
+                    }
+                */
+                route(start,end);
+                
+                
+            }
+        }
+        
+        function route(start,end) {
+            
+            
+                markerCel = new google.maps.Marker({
+                   position: start,
+                   map: map
+                });
+            
+             for ( var i = 0 ; i < positions.length ; i++){
+                
+                
+                var end = positions[i];
+                   
+                
+                var request = {
+                origin: start,
+                destination: end,
+                optimizeWaypoints: true,
+                travelMode: google.maps.TravelMode.DRIVING
+                };
+                
+                directionsService = new google.maps.DirectionsService();
+
+                directionsService.route(request, function (result, status) {
+                if (status == google.maps.DirectionsStatus.OK) {
+
+                    for ( var i=0 ; i < result.routes.length ; i++) {
+                        directionsDisplay = new google.maps.DirectionsRenderer({
+                        map: map,
+                        suppressMarkers: true,
+                        directions:result,
+                        routeIndex:i
+                        });
+                        tabDirRed.push(directionsDisplay);
+                        console.log(tabDirRed);
+                    }
+                        
+                    
+                    
+                    
+                    
+                    var route = result.routes[0].legs[0].distance;
+                    var durat = result.routes[0].legs[0].duration;
+                    
+                    pp.push(route.text);
+                    time.push(durat.text);
+
+                    
+                    for ( var i =1 ; i <= 3 ; i++) {
+                        var container2 = document.getElementById("where");
+                        var input2 = document.createElement("div");
+                        input2.id = "where"+i;
+                        container2.appendChild(input2);
+                        
+                        var container = document.getElementById("where");
+                        var input = document.createElement("div");
+                        input.id="solut"+i;
+                        container.appendChild(input);
+                        
+                    }
+                    for ( var i = 1 ; i <= liczba ; i++) {
+                        var date = "where" + i;
+                        var link = document.getElementById(date);
+                        link.innerHTML = "Pozycja "+i + " : " + address[i-1]; 
+                        
+                        var date2 = "solut" + i;
+                        var link2 = document.getElementById(date);
+                        link2.innerHTML = "Cel - Pozycja "+ i + ", odległość: " + pp[i-1] + ", czas trwania: " + time[i-1]; 
+                        }  
+                    
+                    
+                    
+                }
+            });
+                
+                }
+        }
+
+        function draw(checkbox,category)
+        {
+            if(document.getElementById(checkbox).checked){
+                hideShowCategory(category,true);
+                console.log("wlaczone " + category);
+                if (category == 'pub')
+                    myPub();
+                if (category == 'restaurant')
+                    myRestaurant();
+                if (category == 'cafe')
+                    myCafe();
+                console.log(objects.length);    
+            }
+            else{
+                hideShowCategory(category,false);
+                console.log("wylaczone " + category);
+                var l=0;
+                var k=0;
+                for (var i = 0 ; i < objects.length ; i++)
+                    {
+                        
+                        if (objects[i].category == category)
+                            { 
+                                l++;
+                            } 
+                        
+                    }
+                if (objects[0].category == category)
+                    objects.splice(0,l);
+                else if (objects[objects.length-1].category == category) {
+                    var m = 0;
+                        for (var i=0 ; i < l ; i++)
+                            {
+                                objects.pop();
+                            }
+                } else if (objects[objects.length - m].category == category){
+                         var z = 0;
+                        for (var i=0 ; i < objects.length ; i++)
+                        {
+                        
+                        if (objects[i].category == category)
+                            { 
+                                z++;
+                            }
+                        }
+                    objects.splice(l,z);
+                }
+                                
+                console.log(objects);
+            } 
+        }
+        
+        function contentWindow(title,description)
+        {
+            return '<div style="width: 180px; min-height: 60px;"><h3>' + title + '</h3><p>' + description + '</p></div>'; 
+        }
+        
+        function hideShowCategory(category,show)
+        {
+            for (var i = 0 ; i < objects.length; i++ )
+                {
+                    if(objects[i].category == category)
+                        {
+                            objects[i].setVisible(show);
+                        }
+                }
+        }
+        //dane
+        function myRestaurant() {
+            
+            var restaurant1 = new google.maps.LatLng(52.24556564612272,21.010413765907288);
+            var restaurant2 = new google.maps.LatLng(52.243989049627146,20.99565088748932);
+            var restaurant3 = new google.maps.LatLng(52.23873332338456,21.008697152137756);
+            var restaurant4 = new google.maps.LatLng(52.234633424798304,21.02706491947174);
+            var restaurant5 = new google.maps.LatLng(52.2393640433995,20.98689615726471);
+            var restaurant6 = new google.maps.LatLng(52.23326670777588,21.004405617713928);
+            var restaurant7 = new google.maps.LatLng(52.22874572859496,20.99359095096588);
+            
+            addObject(restaurant1,'Restauracja u Nowego','tel: 798673543','restaurant',' http://maps.google.com/mapfiles/kml/pal2/icon32.png');
+            addObject(restaurant2,'Restauracja u Michała','tel: 786354221','restaurant','http://maps.google.com/mapfiles/kml/pal2/icon32.png');
+            addObject(restaurant3,'Restauracja u Marcina','tel: 876562432','restaurant','http://maps.google.com/mapfiles/kml/pal2/icon32.png');
+            addObject(restaurant4,'Restauracja u Adama','tel: 876453679','restaurant','http://maps.google.com/mapfiles/kml/pal2/icon32.png');
+            addObject(restaurant5,'Restauracja u Nowego','tel: 987564364','restaurant','http://maps.google.com/mapfiles/kml/pal2/icon32.png');
+            addObject(restaurant6,'Restauracja u Stasia','tel: 987765345','restaurant','http://maps.google.com/mapfiles/kml/pal2/icon32.png');
+            addObject(restaurant7,'Restauracja u Nowego','tel: 987651000','restaurant','http://maps.google.com/mapfiles/kml/pal2/icon32.png');
+        }
+        function myPub() {
+            var pub1 = new google.maps.LatLng(52.251713837202885,21.008097678422928);
+            var pub2 = new google.maps.LatLng(52.25166129217113,20.994450598955154);
+            var pub3 = new google.maps.LatLng(52.24777278710505,20.980889350175858);
+            var pub4 = new google.maps.LatLng(52.23615779029492,20.984494239091873);
+            var pub5 = new google.maps.LatLng(52.22942916196301,20.994879752397537);
+            var pub6 = new google.maps.LatLng(52.24125614966341,20.99934294819832);
+            var pub7 = new google.maps.LatLng(52.24031010661531,21.029812842607498);
+            var pub8 = new google.maps.LatLng(52.23163710555889,21.021401435136795);
+            var pub9 = new google.maps.LatLng(52.21728350922218,21.015908271074295);
+            var pub10 = new google.maps.LatLng(52.21670506194208,20.987927466630936);
+            var pub11 = new google.maps.LatLng(52.22064887124958,20.97608283162117);
+            var pub12 = new google.maps.LatLng(52.23447572882794,20.967156440019608);
+            
+            addObject(pub1,'Pub Lolek','tel: 786453625','pub',' http://maps.google.com/mapfiles/kml/pal2/icon27.png');
+            addObject(pub2,'Pub Bolek','tel: 756453627','pub',' http://maps.google.com/mapfiles/kml/pal2/icon27.png');
+            addObject(pub3,'Pub Jasiek','tel: 9878987463','pub',' http://maps.google.com/mapfiles/kml/pal2/icon27.png');
+            addObject(pub4,'Pub Stasiek','tel: 756354657','pub',' http://maps.google.com/mapfiles/kml/pal2/icon27.png');
+            addObject(pub5,'Pub Nowy','tel: 857645362','pub',' http://maps.google.com/mapfiles/kml/pal2/icon27.png');
+            addObject(pub6,'Pub Stary ','tel: 897465362','pub',' http://maps.google.com/mapfiles/kml/pal2/icon27.png');
+            addObject(pub7,'Pub Abc','tel: 897675364','pub',' http://maps.google.com/mapfiles/kml/pal2/icon27.png');
+            addObject(pub8,'Pub U Michala','tel: 897647563','pub',' http://maps.google.com/mapfiles/kml/pal2/icon27.png');
+            addObject(pub9,'Pub u Marcina','tel: 987876765','pub',' http://maps.google.com/mapfiles/kml/pal2/icon27.png');
+            addObject(pub10,'Pub Grzybek','tel: 876098786','pub',' http://maps.google.com/mapfiles/kml/pal2/icon27.png');
+            addObject(pub11,'Pub u kolegi','tel: 987675654','pub',' http://maps.google.com/mapfiles/kml/pal2/icon27.png');
+            addObject(pub12,'Pub u Adama','tel: 876453234','pub',' http://maps.google.com/mapfiles/kml/pal2/icon27.png');
+
+
+            
+        }
+        function myCafe() {
+            var cafe1 = new google.maps.LatLng(52.25786117628389,21.03248029947281);
+            var cafe2 = new google.maps.LatLng(52.243989049627146,20.96604734659195);
+            var cafe3 = new google.maps.LatLng(52.220017885293906,20.98098188638687);
+            var cafe4 = new google.maps.LatLng(52.22601188991522,21.040548384189606);
+            var cafe5 = new google.maps.LatLng(52.24041522350548,21.003812849521637);
+            addObject(cafe1,'Kawiarnia na południu','tel: 736475635','cafe',' http://maps.google.com/mapfiles/kml/pal2/icon43.png');
+            addObject(cafe5,'Kawiarenka','tel: 645264756','cafe',' http://maps.google.com/mapfiles/kml/pal2/icon43.png');
+            addObject(cafe2,'Kawiarnia na północy','tel: 756387384','cafe',' http://maps.google.com/mapfiles/kml/pal2/icon43.png');
+            addObject(cafe3,'Kawiarnia najlepsza','tel: 785746572','cafe',' http://maps.google.com/mapfiles/kml/pal2/icon43.png');
+            addObject(cafe4,'Super Kawa','tel : 873647584','cafe',' http://maps.google.com/mapfiles/kml/pal2/icon43.png');
+        }
+        function setName(input , person ) {
+            var link  = document.getElementById(input).value;
+            console.log(link);
+            person.name = link;
+        }
+        function addFields() {
+            console.log("clicked function addFields");
+            var container = document.getElementById("pac-input");
+            var input = document.createElement("input");
+            input.type = "text";
+            liczba++;
+            input.id = "pac-input"+liczba;
+            container.appendChild(input);
+            container.appendChild(document.createElement("br"));
+            autoWprowadz(document.getElementById(input.id));
+            
+            var container2 = document.getElementById("solut");
+            var input2 = document.createElement("div");
+            console.log(liczba);
+            input2.id = "where"+liczba;
+            container2.appendChild(input2);
+            
+            
+            var container3 = document.getElementById("solut");
+            
+            var input3 = document.createElement("div");
+            input3.id="solut"+liczba;
+            container3.appendChild(input3);
+            
+            
+        }
+        function deleteRoute() {
+            console.log("clicked deleteRounte function");
+            
+             if (positions.length != 0 ) {
+                 
+            for ( var i=0 ; i<tabDirRed.length ; i++){
+                tabDirRed[i].setMap(null);                
+            }
+            for ( var i=0; i <markery.length ; i++) {
+                markery[i].setVisible(false);
+            }
+            
+            
+            markerCel.setVisible(false);
+            
+        } else {
+            alert("nie ma zadnej trasy do wyczyszczenia");
+        }
+        }
+        
+    
+    </script>
+</body>
+</html>
